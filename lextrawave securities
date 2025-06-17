@@ -1,0 +1,256 @@
+// pages/services/[service].js
+import { useRouter } from 'next/router';
+import Head from 'next/head';
+import { useEffect, useState } from 'react';
+import { supabase } from '@/utils/supabaseClient';
+
+const serviceDescriptions = {
+  "Drone Security Services": "High-tech drone surveillance for large properties and events.",
+  "AI-Powered Security Systems": "Automated threat detection using AI.",
+  "Data Security & Breach Response": "Protection and emergency response for digital data.",
+  "Telecom Security Bundles": "Complete protection for telecom infrastructures.",
+  "Cyber Security Services": "Advanced threat monitoring and malware protection.",
+  "Private Security": "Trained personnel for physical protection.",
+  "K9 & Sniffer Dog Units": "Specialized dog units for patrol and detection.",
+  "Rapid Response Teams": "Quick deployment security forces for emergencies.",
+  "Neighborhood Patrols": "Visible deterrents and regular community patrols.",
+  "Biometric Security Solutions": "Fingerprint, face, and iris scan based systems.",
+  "Motion Detector Systems": "Intruder detection with smart motion sensing.",
+  "Private Bodyguard Services": "Elite close protection officers for VIPs."
+};
+
+export default function ServiceDetail() {
+  const router = useRouter();
+  const { service } = router.query;
+  const decodedService = decodeURIComponent(service || "");
+  const description = serviceDescriptions[decodedService];
+
+  const [userRequests, setUserRequests] = useState([]);
+  const [allRequests, setAllRequests] = useState([]);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [editing, setEditing] = useState(null);
+  const [editDetails, setEditDetails] = useState('');
+  const [editStatus, setEditStatus] = useState('');
+  const [formData, setFormData] = useState({
+    service: decodedService,
+    details: ''
+  });
+
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setFormData((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    const {
+      data: { user }
+    } = await supabase.auth.getUser();
+    if (!user) return;
+
+    const { error } = await supabase.from('service_requests').insert([
+      {
+        user_id: user.id,
+        service: formData.service,
+        details: formData.details,
+        status: 'Pending'
+      }
+    ]);
+
+    if (!error) {
+      setFormData({ service: decodedService, details: '' });
+      alert('Request submitted!');
+      fetchData();
+    }
+  };
+
+  const fetchData = async () => {
+    const {
+      data: { user }
+    } = await supabase.auth.getUser();
+
+    if (user) {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', user.id)
+        .single();
+
+      if (profile?.role === 'admin') {
+        setIsAdmin(true);
+        const { data: all } = await supabase.from('service_requests').select('*');
+        setAllRequests(all || []);
+      } else {
+        const { data: own } = await supabase
+          .from('service_requests')
+          .select('*')
+          .eq('user_id', user.id);
+        setUserRequests(own || []);
+      }
+    }
+  };
+
+  const handleDelete = async (id) => {
+    if (confirm('Delete this request?')) {
+      await supabase.from('service_requests').delete().eq('id', id);
+      fetchData();
+    }
+  };
+
+  const startEditing = (req) => {
+    setEditing(req.id);
+    setEditDetails(req.details);
+    setEditStatus(req.status || 'Pending');
+  };
+
+  const handleUpdate = async (id) => {
+    await supabase
+      .from('service_requests')
+      .update({ details: editDetails, status: editStatus })
+      .eq('id', id);
+    setEditing(null);
+    fetchData();
+  };
+
+  useEffect(() => {
+    fetchData();
+  }, []);
+
+  if (!description) {
+    return <p className="text-center text-white mt-10">Service not found.</p>;
+  }
+
+  return (
+    <>
+      <Head>
+        <title>{decodedService} | Lextra Wave Securities</title>
+        <meta name="description" content={description} />
+        <meta name="robots" content="index, follow" />
+        <meta name="google-site-verification" content="YOUR_VERIFICATION_CODE_HERE" />
+        <meta property="og:title" content={`${decodedService} | Lextra Wave Securities`} />
+        <meta property="og:description" content={description} />
+        <meta property="og:type" content="website" />
+        <meta property="og:url" content={`https://lextrawavesecurity.vercel.app/services/${encodeURIComponent(decodedService)}`} />
+        <meta property="og:image" content="https://lextrawavesecurity.vercel.app/og-image.jpg" />
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:title" content={`${decodedService} | Lextra Wave Securities`} />
+        <meta name="twitter:description" content={description} />
+        <meta name="twitter:image" content="https://lextrawavesecurity.vercel.app/og-image.jpg" />
+      </Head>
+      <div className="min-h-screen bg-black text-white p-6 max-w-4xl mx-auto">
+        <h1 className="text-3xl font-bold mb-4">{decodedService}</h1>
+        <p className="text-lg mb-8">{description}</p>
+
+        <form onSubmit={handleSubmit} className="mb-10">
+          <div className="mb-4">
+            <label htmlFor="service" className="block mb-1 font-semibold">Service</label>
+            <select
+              id="service"
+              name="service"
+              value={formData.service}
+              onChange={handleChange}
+              required
+              className="w-full px-3 py-2 border border-gray-600 bg-black text-white rounded"
+            >
+              <option value="">-- Select a Service --</option>
+              {Object.keys(serviceDescriptions).map((srv) => (
+                <option key={srv} value={srv}>{srv}</option>
+              ))}
+            </select>
+          </div>
+          <div className="mb-4">
+            <label htmlFor="details" className="block mb-1 font-semibold">Details</label>
+            <textarea
+              id="details"
+              name="details"
+              value={formData.details}
+              onChange={handleChange}
+              required
+              className="w-full px-3 py-2 border border-gray-600 bg-black text-white rounded"
+            ></textarea>
+          </div>
+          <button type="submit" className="bg-green-600 hover:bg-green-700 px-4 py-2 rounded text-white">Submit Request</button>
+        </form>
+
+        <h2 className="text-2xl font-semibold mb-2">{isAdmin ? 'All Service Requests' : 'Your Service Requests'}</h2>
+        <ul className="space-y-2">
+          {(isAdmin ? allRequests : userRequests).map((req) => (
+            <li key={req.id} className="border border-gray-700 p-4 rounded">
+              <p><strong>Service:</strong> {req.service}</p>
+              {editing === req.id ? (
+                <div>
+                  <textarea
+                    className="w-full bg-black border p-2 mt-2 text-white"
+                    value={editDetails}
+                    onChange={(e) => setEditDetails(e.target.value)}
+                  />
+                  <select
+                    className="w-full bg-black border p-2 mt-2 text-white"
+                    value={editStatus}
+                    onChange={(e) => setEditStatus(e.target.value)}
+                  >
+                    <option value="Pending">Pending</option>
+                    <option value="In Progress">In Progress</option>
+                    <option value="Resolved">Resolved</option>
+                  </select>
+                  <button className="mt-2 bg-blue-600 px-3 py-1 rounded" onClick={() => handleUpdate(req.id)}>Save</button>
+                  <button className="mt-2 ml-2 bg-gray-600 px-3 py-1 rounded" onClick={() => setEditing(null)}>Cancel</button>
+                </div>
+              ) : (
+                <>
+                  <p><strong>Details:</strong> {req.details}</p>
+                  <p><strong>Status:</strong> {req.status || 'Pending'}</p>
+                </>
+              )}
+              {isAdmin && (
+                <div className="mt-2 space-x-2">
+                  <p><strong>User:</strong> {req.user_id}</p>
+                  <button className="bg-yellow-600 px-3 py-1 rounded" onClick={() => startEditing(req)}>Edit</button>
+                  <button className="bg-red-600 px-3 py-1 rounded" onClick={() => handleDelete(req.id)}>Delete</button>
+                </div>
+              )}
+            </li>
+          ))}
+        </ul>
+      </div>
+    </>
+  );
+}
+// utils/supabaseClient.js
+import { createClient } from '@supabase/supabase-js';
+
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+yogmqykhfkuqarohdxer=https://your-project.supabase.co
+eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlvZ21xeWtoZmt1cWFyb2hkeGVyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTAxNjA1OTYsImV4cCI6MjA2NTczNjU5Nn0.I5OtmSvVRNJ5HyBcicyTkfcaJ9hnDMEUDscVp4YEg1c=your-anon-key
+{
+  "name": "lextra-wave-security",
+  "version": "1.0.0",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.0.0",
+    "next": "^13.4.13",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0
+# Lextra Wave Securities
+
+High-tech security service website powered by Next.js and Supabase.
+
+## Features
+
+- Request services like drone security, AI-powered systems, K9 patrols, and more.
+- Admins can view and update all requests.
+- Supabase authentication and role-based data access.
+
+## Tech Stack
+
+- Next.js
+- Supabase (PostgreSQL + Auth + RLS)
+- Tailwind CSS (optional)
